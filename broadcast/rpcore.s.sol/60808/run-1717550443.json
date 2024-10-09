@@ -1,0 +1,49 @@
+{
+  "transactions": [
+    {
+      "hash": "0x313813022dfd1a12fa67b0aff68e5d450b2e51d4e05eefbe6f30ad8cc3dc6237",
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0xCA9c5943Dd7d0fE1E6A0Cf12F2eA65d310A3b2AA",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "type": "0x02",
+        "from": "0xcda2fdb452ff4f5d7ba1c3d5dfcc9cb926a5eb7d",
+        "to": "0xca9c5943dd7d0fe1e6a0cf12f2ea65d310a3b2aa",
+        "gas": "0xfa35",
+        "value": "0x0",
+        "data": "0xdfba52c7000000000000000000000000cda2fdb452ff4f5d7ba1c3d5dfcc9cb926a5eb7d0000000000000000000000000000000000000000000000000000000000000001",
+        "nonce": "0x114",
+        "accessList": []
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [
+    {
+      "transactionHash": "0x313813022dfd1a12fa67b0aff68e5d450b2e51d4e05eefbe6f30ad8cc3dc6237",
+      "transactionIndex": "0x3",
+      "blockHash": "0xad0b3937d0b59592d4302a85508eebb4b6fd80ddf971767da5b060cc18a49872",
+      "blockNumber": "0x242b9d",
+      "from": "0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D",
+      "to": "0xCA9c5943Dd7d0fE1E6A0Cf12F2eA65d310A3b2AA",
+      "cumulativeGasUsed": "0x58afc",
+      "gasUsed": "0xb526",
+      "contractAddress": null,
+      "logs": [],
+      "status": "0x1",
+      "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "type": "0x2",
+      "effectiveGasPrice": "0xfd"
+    }
+  ],
+  "libraries": [],
+  "pending": [],
+  "returns": {},
+  "timestamp": 1717550443,
+  "chain": 60808,
+  "multi": false,
+  "commit": "7d9679b"
+}
