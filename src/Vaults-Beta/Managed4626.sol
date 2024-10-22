@@ -47,9 +47,10 @@ import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
  */
 abstract contract Managed4626 is ERC20, IERC4626 {
     using Math for uint256;
-    uint private _assetBalances;
-    IERC20 private immutable _asset;
-    uint8 private immutable _underlyingDecimals;
+    uint internal _assetBalances;
+
+    IERC20 internal immutable _asset;
+    uint8 internal immutable _underlyingDecimals;
 
     /**
      * @dev Attempted to deposit more assets than the max amount for `receiver`.
