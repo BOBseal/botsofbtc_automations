@@ -32,11 +32,6 @@ contract BotEntryPoint is Ownable{
     Ownable(msg.sender)
     {}
 
-    modifier AssetAvailable(address asset){
-        require(vaultAvailable[asset]);
-        _;
-    }
-
     // preview shares to get for asset deposits for a vault at set pegs
     function previewBuy(address asset,uint assetsDeposit) public view returns(uint){
         AssetPegs memory peg = pegData[asset];
@@ -45,7 +40,12 @@ contract BotEntryPoint is Ownable{
             return sharesReceived;
         }else return 0;
     }
-
+    /*
+    function getVault(address asset) public view returns(Vault){
+        Vault _vaultInstance = _assetToVault[asset];
+        return _vaultInstance;
+    }
+    */
     function setPeg(address asset , uint assetUnit , uint ShareUnit) public onlyOwner{
         AssetPegs memory peg = AssetPegs({
             _shares:ShareUnit,
@@ -54,22 +54,26 @@ contract BotEntryPoint is Ownable{
         pegData[asset] = peg;
     }
 
-    function buyShare(address asset,uint assetToDepost) public vaultAvailable(asset) {
+    function buyShare(address asset,uint assetToDepost) public {
+        require(vaultAvailable[asset]); 
         uint sharesToRcv = previewBuy(asset,assetToDepost);
-        require(sharesToRcv >0,"A:S pegs unavailable");
+        require(sharesToRcv >0,"unavailable");
         Vault _vaultInstance = _assetToVault[asset];
         require(_vaultInstance.balanceOf(address(this))>= sharesToRcv);
         SafeERC20.safeTransfer(_vaultInstance,msg.sender,sharesToRcv);
         _soldShares[asset] += sharesToRcv;
-        _raisedAssets += assetToDeposit;        
+        _raisedAssets[asset] += assetToDepost;        
     }
 
-    function addToVault(address asset, uint assetAmount) public onlyOwner vaultAvailable(asset){
+    function addToVault(address asset, uint assetAmount) public onlyOwner{
+        require(vaultAvailable[asset]);
+        Vault _vaultInstance = _assetToVault[asset];
+
+    }
+
+    function mintShares(address asset , uint shares) public onlyOwner{
+        require(vaultAvailable[asset]);
         
-    }
-
-    function mintShares(address asset , uint shares) public onlyOwner vaultAvailable(asset){
-
     }
 
     function burnShares(address asset , uint shares) public onlyOwner{
