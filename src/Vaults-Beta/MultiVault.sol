@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v5.0.0) (token/ERC20/extensions/ERC4626.sol)
-
+/// WIP use with caution
 pragma solidity ^0.8.20;
 
 import {IERC20, IERC20Metadata, ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC4626} from "openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
-
+import "../constants/APIProxy.sol";
 /**
  * @dev Implementation of the ERC4626 "Tokenized Vault Standard" as defined in
  * https://eips.ethereum.org/EIPS/eip-4626[EIP-4626].
@@ -59,11 +59,9 @@ abstract contract Multi4626V1 is ERC20, IERC4626 {
     //uint internal _assetBalances;
     
     address[] internal _assets;
-    uint8[] internal _underlyingDecimals;
-    address internal USDCAddress;
-    bytes32 internal BTC_ID = bytes32("BTC");
-    bytes32 internal ETH_ID = bytes32("ETH");
-
+    address[] internal _orcales;
+    address internal _usdc;
+    
     uint8 internal ratio = 2; // divisor for Usd value input    
     mapping(address=>uint) internal _assetBalances;
     /**
@@ -89,12 +87,10 @@ abstract contract Multi4626V1 is ERC20, IERC4626 {
     /**
      * @dev Set the underlying asset contract. This must be an ERC20-compatible contract (ERC20 or ERC777).
      */
-    constructor(address[] assetsList) {
+    constructor(address[] assetsList, address[] _oracleList, address USDCAddress) {
         _assets = assetsList;
-        for(uint i = 0; i< assetsList.length;i++){
-            (,uint8 deci) = _tryGetAssetDecimals(IERC20(_assets[i]));
-            _underlyingDecimals.push(deci);
-        }
+        _orcales = _oracleList;
+        _usdc = USDCAddress;
     }
 
     /**
@@ -125,12 +121,12 @@ abstract contract Multi4626V1 is ERC20, IERC4626 {
     }
 
     /** @dev See {IERC4626-asset}. */
-    function asset() public view virtual returns (IERC20[] memory) {
-        return _asset;
+    function assets() public view virtual returns (address[] memory) {
+        return _assets;
     }
 
     /** @dev See {IERC4626-totalAssets}. */
-    function totalAssets() public view virtual returns (uint256[] memory) {
+    function totalAssetBalances() public view virtual returns (uint256[] memory) {
         uint length = _asset.length;
         uint256[] memory amounts = new uint256[](length);
         for(uint i = 0; i < length;i++){
@@ -138,14 +134,16 @@ abstract contract Multi4626V1 is ERC20, IERC4626 {
         }
         return amounts;
     }
-
-    // calls oracle for data 
-    // returns value of assets array in USD , 8 decimals
-    /*
-    function _getTotalAssetVal() internal returns(uint){
-
+    // returns value for underlying assets in usd , 18 decimal places
+    function totalAssets() public view virtual returns(uint){
+        uint value ;
+        for(uint i=0; i< _assets.length;i++){
+            (int224 aValue,) = IProxy(_assets[i]).read();
+            value += uint(aValue);
+        }
+        return value;
     }
-    */
+
     /** @dev See {IERC4626-convertToShares}. */
     function convertToShares(uint256 assets) public view virtual returns (uint256) {
         return _convertToShares(assets, Math.Rounding.Floor);

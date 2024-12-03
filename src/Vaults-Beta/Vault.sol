@@ -1,4 +1,5 @@
 // SPDX-License-Identifier:  MIT
+//WIP use with caution
 
 pragma solidity ^0.8.20;
 
@@ -9,7 +10,7 @@ import "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 contract Vault is Managed4626 ,Ownable{
     using Math for uint256;
-    uint public fee = 5; // 0.05 % fee on deposits & withdrawals
+    uint public fee = 50; // 0.05 % fee on deposits & withdrawals
     uint public fractionalReserve = 30; // Shares follow fractional reserves
     uint internal _currentWithdrawn;
     address public controller;
@@ -48,28 +49,23 @@ contract Vault is Managed4626 ,Ownable{
     function _initializeVault(address sharesTo,address depositFrom, uint assetsToDeposit) public onlyManager returns(bool){
         require(_asset.balanceOf(depositFrom) >= assetsToDeposit);
         SafeERC20.safeTransferFrom(_asset,depositFrom,address(this),assetsToDeposit);
+        deposit(assetsToDeposit, sharesTo);        
         _initialized = true;
         return _initialized;
     }
+        
+    function execute(address target ,bytes calldata data) public payable onlyManager Initialized returns(bool,bytes){
+        (bool success , bytes returnData)=target.call{value:msg.value}(data);
+        return (success,returnData);
+    }
     /// returns withdrawable fraction for one case and zero for rest
+    /*
     function getWithdrawable() public view returns(uint){
         uint tWithdrawable = _assetBalances * fractionalReserve / 100;
         if(_currentWithdrawn < tWithdrawable){
             return (tWithdrawable - _currentWithdrawn);
         } else return 0;
     }
-
-    // safeWithdraw by manager of Assets , max 30% of _assetBalances . Does not take account balanceOf(address(this))
-    function withdrawAssets(uint amount) public onlyManager Initialized returns(bool){
-        require(_asset.balanceOf(address(this)) >= amount);
-        require(getWithdrawable() >= amount); 
-        SafeERC20.safeTransfer(_asset,msg.sender,amount);
-        _currentWithdrawn += amount;
-        return true;
-    }
-    
-    // safeDeposit by manager of assets , if deposit exceeds currentWithdrawn adds in favour of vault
-    // call from contract : // approve => depositAssets
     function depositAssets(uint amount) public onlyManager Initialized returns(bool){
         require(_asset.balanceOf(msg.sender) >= amount);
         SafeERC20.safeTransferFrom(_asset, msg.sender, address(this), amount);
@@ -79,13 +75,8 @@ contract Vault is Managed4626 ,Ownable{
         }
         return true;
     }
-    // share controls for manager
-    function mintShare(address at,uint shares) public onlyManager Initialized returns(bool){
-        _mint(at,shares);
-        return true;
-    }
-
-    function burnShare(uint shares) public onlyManager Initialized returns(bool){
+    */
+    function burnShare(uint shares) public Initialized returns(bool){
         require(balanceOf(msg.sender) >= shares);
         _burn(msg.sender,shares);
         return true;
