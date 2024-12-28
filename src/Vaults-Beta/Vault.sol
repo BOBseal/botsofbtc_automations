@@ -19,17 +19,15 @@ contract Vault is Managed4626 ,Ownable{
         IERC20 ercAsset, 
         string memory name,
         string memory symbol,
-        address owner,
-        address _router,
-        uint initialAssets
-    )
+        address _owner   
+        )
     ERC20(name,symbol)
     Managed4626(ercAsset)
-    Ownable(owner)
+    Ownable(_owner)
     {
-        //mint 100k shares to Manager contract for Initial Boostrap
-        _mint(_router, initialAssets);
-        controller = _router;        
+        //mint 100k shares to address(dead) to minimize the chances for manipulation attacks
+        _mint(0x000000000000000000000000000000000000dEaD,100000 * 10** decimals());
+        controller = msg.sender;      
     }
     
     modifier onlyManager(){
@@ -54,8 +52,8 @@ contract Vault is Managed4626 ,Ownable{
         return _initialized;
     }
         
-    function execute(address target ,bytes calldata data) public payable onlyManager Initialized returns(bool,bytes){
-        (bool success , bytes returnData)=target.call{value:msg.value}(data);
+    function execute(address target ,bytes calldata data) public payable onlyManager Initialized returns(bool,bytes memory){
+        (bool success , bytes memory returnData)=target.call{value:msg.value}(data);
         return (success,returnData);
     }
     /// returns withdrawable fraction for one case and zero for rest
