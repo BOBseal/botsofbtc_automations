@@ -7,7 +7,7 @@ import {IERC20, IERC20Metadata, ERC20} from "openzeppelin-contracts/contracts/to
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC4626} from "openzeppelin-contracts/contracts/interfaces/IERC4626.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
-
+import "../interfaces/IAAVEV3.sol";
 /**
  * @dev Implementation of the ERC4626 "Tokenized Vault Standard" as defined in
  * https://eips.ethereum.org/EIPS/eip-4626[EIP-4626].
@@ -45,13 +45,16 @@ import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
  * To learn more, check out our xref:ROOT:erc4626.adoc[ERC-4626 guide].
  * ====
  */
-abstract contract Managed4626 is ERC20, IERC4626 {
+abstract contract AAVE4626 is ERC20, IERC4626 {
     using Math for uint256;
-    uint internal _assetBalances;
 
+    AAVEv3 public aavePool;
+    IERC20 public aaveAsset;
     IERC20 internal immutable _asset;
     uint8 internal immutable _underlyingDecimals;
-
+    uint8 internal immutable _underlyingDecimalsAaveAsset;
+    uint public fee = 50; // 0.05 % fee on deposits & withdrawals
+    address internal _feeReciever;
     /**
      * @dev Attempted to deposit more assets than the max amount for `receiver`.
      */
@@ -75,10 +78,16 @@ abstract contract Managed4626 is ERC20, IERC4626 {
     /**
      * @dev Set the underlying asset contract. This must be an ERC20-compatible contract (ERC20 or ERC777).
      */
-    constructor(IERC20 asset_) {
+    constructor(IERC20 asset_,IERC20 lendAsset ,address aaveV3Pool, address feeReciever ) {
         (bool success, uint8 assetDecimals) = _tryGetAssetDecimals(asset_);
         _underlyingDecimals = success ? assetDecimals : 18;
         _asset = asset_;
+        aavePool = AAVEv3(aaveV3Pool);
+        aaveAsset = lendAsset;
+        (bool successAve, uint8 assetDecimalsAve) = _tryGetAssetDecimals(lendAsset);
+        _underlyingDecimalsAaveAsset = successAve ? assetDecimalsAve : 18;
+        _feeReciever = feeReciever;
+        //_mint(0x000000000000000000000000000000000000dEaD, 10000000 * 10 ** decimals());
     }
 
     /**
@@ -105,27 +114,26 @@ abstract contract Managed4626 is ERC20, IERC4626 {
      * See {IERC20Metadata-decimals}.
      */
     function decimals() public view virtual override(IERC20Metadata, ERC20) returns (uint8) {
-        return _underlyingDecimals + _decimalsOffset();
+        return _underlyingDecimalsAaveAsset + _decimalsOffset();
     }
 
     /** @dev See {IERC4626-asset}. */
     function asset() public view virtual returns (address) {
         return address(_asset);
     }
-
+    
     /** @dev See {IERC4626-totalAssets}. */
     function totalAssets() public view virtual returns (uint256) {
-        return _assetBalances;
+        return IERC20(aaveAsset).balanceOf(address(this));
     }
 
-    /** @dev See {IERC4626-convertToShares}. */
-    function convertToShares(uint256 assets) public view virtual returns (uint256) {
-        return _convertToShares(assets, Math.Rounding.Floor);
+    function convertToShares(uint256 assets) public view virtual override returns (uint256) {
+        return _convertToShares(assets - _feeOnRaw(assets), Math.Rounding.Floor);
     }
 
-    /** @dev See {IERC4626-convertToAssets}. */
-    function convertToAssets(uint256 shares) public view virtual returns (uint256) {
-        return _convertToAssets(shares, Math.Rounding.Floor);
+    function convertToAssets(uint256 shares) public view virtual override returns (uint256) {
+        uint assets = _convertToAssets(shares, Math.Rounding.Floor);
+        return assets + _feeOnRaw(assets);
     }
 
     /** @dev See {IERC4626-maxDeposit}. */
@@ -148,24 +156,24 @@ abstract contract Managed4626 is ERC20, IERC4626 {
         return balanceOf(owner);
     }
 
-    /** @dev See {IERC4626-previewDeposit}. */
-    function previewDeposit(uint256 assets) public view virtual returns (uint256) {
-        return _convertToShares(assets, Math.Rounding.Floor);
+    function previewDeposit(uint256 assets) public view virtual override returns (uint256) {
+        uint256 fee_ = _feeOnRaw(assets);
+        return _convertToShares(assets-fee_, Math.Rounding.Floor);
     }
 
-    /** @dev See {IERC4626-previewMint}. */
-    function previewMint(uint256 shares) public view virtual returns (uint256) {
-        return _convertToAssets(shares, Math.Rounding.Ceil);
+    function previewMint(uint256 shares) public view virtual override returns (uint256) {
+        uint256 assets = _convertToAssets(shares, Math.Rounding.Ceil);
+        return assets + _feeOnRaw(assets);
     }
 
-    /** @dev See {IERC4626-previewWithdraw}. */
-    function previewWithdraw(uint256 assets) public view virtual returns (uint256) {
-        return _convertToShares(assets, Math.Rounding.Ceil);
+    function previewWithdraw(uint256 assets) public view virtual override returns (uint256) {
+        uint256 fee_ = _feeOnRaw(assets);
+        return _convertToShares(assets + fee_, Math.Rounding.Ceil);
     }
-
-    /** @dev See {IERC4626-previewRedeem}. */
-    function previewRedeem(uint256 shares) public view virtual returns (uint256) {
-        return _convertToAssets(shares, Math.Rounding.Floor);
+    
+    function previewRedeem(uint256 shares) public view virtual override returns (uint256) {
+        uint256 assets = _convertToAssets(shares, Math.Rounding.Floor);
+        return assets - _feeOnRaw(assets);
     }
 
     /** @dev See {IERC4626-deposit}. */
@@ -174,10 +182,13 @@ abstract contract Managed4626 is ERC20, IERC4626 {
         if (assets > maxAssets) {
             revert ERC4626ExceededMaxDeposit(receiver, assets, maxAssets);
         }
-
         uint256 shares = previewDeposit(assets);
         _deposit(_msgSender(), receiver, assets, shares);
-
+        uint fees = _feeOnRaw(assets) /2;
+        if(fees >0 && _feeReciever != address(0)){
+            uint feeShares = _convertToShares(fees,Math.Rounding.Floor);
+            _mint(_feeReciever,feeShares);
+        }
         return shares;
     }
 
@@ -194,7 +205,12 @@ abstract contract Managed4626 is ERC20, IERC4626 {
 
         uint256 assets = previewMint(shares);
         _deposit(_msgSender(), receiver, assets, shares);
-
+        uint256 assetsWhole = _convertToAssets(shares, Math.Rounding.Ceil);
+        uint fees = _feeOnRaw(assetsWhole) /2;
+        if(fees >0 && _feeReciever != address(0)){
+            uint feeShares = _convertToShares(fees,Math.Rounding.Ceil);
+            _mint(_feeReciever,feeShares);
+        }
         return assets;
     }
 
@@ -207,7 +223,11 @@ abstract contract Managed4626 is ERC20, IERC4626 {
 
         uint256 shares = previewWithdraw(assets);
         _withdraw(_msgSender(), receiver, owner, assets, shares);
-
+        uint fees = _feeOnRaw(assets) /2;
+        if(fees >0 && _feeReciever != address(0)){
+            uint feeShares = _convertToShares(fees,Math.Rounding.Ceil);
+            _mint(_feeReciever,feeShares);
+        }
         return shares;
     }
 
@@ -220,7 +240,12 @@ abstract contract Managed4626 is ERC20, IERC4626 {
 
         uint256 assets = previewRedeem(shares);
         _withdraw(_msgSender(), receiver, owner, assets, shares);
-
+        uint256 assetsWhole = _convertToAssets(shares, Math.Rounding.Floor);
+        uint fees = _feeOnRaw(assetsWhole) /2;
+        if(fees >0 && _feeReciever != address(0)){
+            uint feeShares = _convertToShares(fees,Math.Rounding.Floor);
+            _mint(_feeReciever,feeShares);
+        }
         return assets;
     }
 
@@ -250,7 +275,8 @@ abstract contract Managed4626 is ERC20, IERC4626 {
         // assets are transferred and before the shares are minted, which is a valid state.
         // slither-disable-next-line reentrancy-no-eth
         SafeERC20.safeTransferFrom(_asset, caller, address(this), assets);
-        _assetBalances += assets;
+        _asset.approve(address(aavePool),assets);
+        aavePool.supply(address(_asset),assets,address(this),0);
         _mint(receiver, shares);
 
         emit Deposit(caller, receiver, assets, shares);
@@ -268,7 +294,7 @@ abstract contract Managed4626 is ERC20, IERC4626 {
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
         }
-        if(_asset.balanceOf(address(this)) < assets){
+        if(aaveAsset.balanceOf(address(this)) < assets){
             revert("unable to process");
         }
         // If _asset is ERC777, `transfer` can trigger a reentrancy AFTER the transfer happens through the
@@ -277,10 +303,25 @@ abstract contract Managed4626 is ERC20, IERC4626 {
         //
         // Conclusion: we need to do the transfer after the burn so that any reentrancy would happen after the
         // shares are burned and after the assets are transferred, which is a valid state.
+        uint amount = aavePool.withdraw(address(_asset),assets,address(this));
+        if(amount <=0){
+            revert();
+        }
         _burn(owner, shares);
         SafeERC20.safeTransfer(_asset, receiver, assets);
-        _assetBalances -= assets;
         emit Withdraw(caller, receiver, owner, assets, shares);
+    }
+
+    function _setFeeReciever(address to) internal{
+        _feeReciever = to;
+    }
+
+    function _fee() internal view returns(uint){
+        return fee;
+    }
+
+    function _feeOnRaw(uint256 assets) private view returns (uint256) {
+        return assets.mulDiv(_fee(), 10000, Math.Rounding.Floor);
     }
 
     function _decimalsOffset() internal pure virtual returns (uint8) {

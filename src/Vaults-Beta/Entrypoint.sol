@@ -90,7 +90,7 @@ contract BotEntryPoint is Ownable{
         Vault vault = _assetToVault[_underLyingAsset];
         require(vault.isInitialized()==false);
         IERC20(_underLyingAsset).approve(address(vault),_assetsToDeposit);
-        vault._initializeVault(address(this),address(this),_assetsToDeposit);
+        vault._initializeVault(address(this),address(this),_assetsToDeposit, 10);
     }
 
 }
