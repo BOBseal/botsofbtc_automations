@@ -10,6 +10,9 @@ import "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 contract BethVault is Multi4626V1 ,Ownable{
     bool internal initalized = false;
+    address public operator;
+    //uint public opAccessiblePortion = 50;
+    mapping(address=>uint) public totalUtilised;
     constructor(
         address[] memory assetsList, 
         address[] memory _oracleList,
@@ -35,13 +38,18 @@ contract BethVault is Multi4626V1 ,Ownable{
     ERC20(_name,_tick)
     Ownable(msg.sender)
     {
+        operator = msg.sender;
        // _mint(msg.sender,100000 * 10 ** uint(decimals()));
     }
     modifier isInitialized(){
         require(initalized,"Not Initialized");
         _;
     }
-
+    // operator is responsible for fund utilisation & fee management/distribution
+    modifier isOp(){
+        require(msg.sender == operator);
+        _;
+    }
     function initialize(address to,uint sharesToMint ,uint[] memory initialAssets) public onlyOwner{
         require(initalized == false);
         for(uint i=0; i< initialAssets.length; i++){
@@ -54,13 +62,40 @@ contract BethVault is Multi4626V1 ,Ownable{
         _mint(to,sharesToMint);
         initalized = true;
     }
+    
     function execute(address target ,bytes calldata data) public payable onlyOwner isInitialized returns(bool,bytes memory){
         (bool success , bytes memory returnData)=target.call{value:msg.value}(data);
         return (success,returnData);
     }
 
-    function withdrawFee(address token , uint amount) public onlyOwner{
-        _withdrawFee(token,amount);
+    function opWithdrawAssets(address token,uint amount,address to) public isOp isInitialized returns(bool){
+        require(IERC20(token).balanceOf(address(this)) >= amount);
+        IERC20(token).transfer(to,amount);
+        totalUtilised[token] += amount;
+        return true;
+    }
+
+    function opDepositAssets(address token, uint amount , address from) public isOp isInitialized returns(bool){
+        require(IERC20(token).balanceOf(from)>= amount);
+        if(token == _assets[0] || token == _assets[1]){
+            //require(IERC20(token).balanceOf(from)>= amount);
+            IERC20(token).transferFrom(from,address(this),amount);
+            totalUtilised[token] -= amount;
+            return true;
+        } else return false;
+    }
+
+    function opDepositYield(address token, uint amount, address from) public isOp isInitialized returns(bool){
+        if(token == _assets[0] || token == _assets[1]){
+            require(IERC20(token).balanceOf(from)>= amount);
+            IERC20(token).transferFrom(from,address(this),amount);
+            _assetBalances[token] += amount;
+            return true;
+        } else return false;
+    }
+
+    function withdrawFee(uint amount,address to) public isOp{
+        _withdrawFee(amount, to);
     }
 
     function changeStates(
@@ -86,4 +121,12 @@ contract BethVault is Multi4626V1 ,Ownable{
     function setSlippage(uint num) public onlyOwner{
         _setSlippage(num);
     }
+
+    function setFee(uint num) public onlyOwner{
+        _setFee(num);
+    }
+
+    function setOperator(address to) public onlyOwner{
+        operator = to;
+    }    
 }

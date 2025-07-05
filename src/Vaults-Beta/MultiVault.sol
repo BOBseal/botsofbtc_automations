@@ -30,8 +30,9 @@ abstract contract Multi4626V1 is ERC20 {
     uint8[] public _assetDecimals;
     address[] internal _orcales;
     IERC20 internal _usdc;
-    uint internal slippage = 10;
+    uint internal slippage = 20;
     uint divisor = 2;
+    uint internal _txFee = 100; 
     mapping(address=>uint) internal _assetBalances;
     mapping(address=>uint) internal _feeBalances;
     uint24[] public feeValues;// for the MAINNET are 500 (0.05%), 3000 (0.3%), and 10000 (1%), other than that tx will revert;
@@ -65,7 +66,7 @@ abstract contract Multi4626V1 is ERC20 {
         feeValues = _feeVals;
     }
     
-    function feeRaised(address token , uint amount) public view returns(uint){
+    function feeRaised(address token) public view returns(uint){
         return _feeBalances[token];
     }
 
@@ -124,7 +125,9 @@ abstract contract Multi4626V1 is ERC20 {
     Function is not to be called from a contract
      */
     function previewMint(uint shares) public view returns(uint){
-        return (pricePerShare()/10** (18 - 6)) * (shares / 10 ** decimals());
+        uint s = (pricePerShare()/10** (18 - 6)) * (shares / 10 ** decimals());
+        uint sAdjust = s + ((s/1000)* slippage);
+        return sAdjust;
     }
     // returns amount of assets returned after redeeming shares 
     /*
@@ -164,7 +167,7 @@ abstract contract Multi4626V1 is ERC20 {
         if (shares > maxShares) {
             revert ERC4626ExceededMaxMint(receiver, shares, maxShares);
         }
-        uint usdcCost = (pricePerShare()/10** (18 -6)) * (shares / 10 ** decimals());
+        uint usdcCost = previewMint(shares);
         //uint[] memory rtVals = returnValues(shares);
         SafeERC20.safeTransferFrom(_usdc,msg.sender,address(this),usdcCost);
         _usdc.approve(address(s_okuRouter),usdcCost);
@@ -189,14 +192,14 @@ abstract contract Multi4626V1 is ERC20 {
     */
 
     function redeem(uint256 shares, address receiver) public virtual returns (uint256) {
-        uint256 maxShares = maxRedeem(receiver);
+        uint256 maxShares = maxRedeem(msg.sender);
         if (shares > maxShares) {
-            revert ERC4626ExceededMaxRedeem(receiver, shares, maxShares);
+            revert ERC4626ExceededMaxRedeem(msg.sender, shares, maxShares);
         }
         uint sharesRedeem = _processFee(shares);
         uint[] memory rtVals = returnValues(sharesRedeem);        
         uint assets = 0;
-        _burn(receiver, sharesRedeem);
+        _burn(msg.sender, shares);
         for(uint i=0 ; i< 2;++i){
             IERC20(_assets[i]).approve(address(s_okuRouter),rtVals[i]);
             bytes memory path = _getSwapPath(_assets[i],feeValues[i],address(_usdc));
@@ -218,19 +221,16 @@ abstract contract Multi4626V1 is ERC20 {
         return 8;
     }
 
-    function _withdrawFee(address token,uint amount) internal {
-        if(token == address(_usdc)){
-            require(_usdc.balanceOf(address(this)) >= amount);
-            _usdc.transfer(msg.sender,amount);
-        } else {
-            require(_feeBalances[token]>= amount);
-            IERC20(token).transfer(msg.sender,amount);
-        }
+    function _withdrawFee(uint amount, address to) internal {
+            require(balanceOf(address(this))>= amount);
+            _transfer(address(this),to,amount);
+            _feeBalances[address(this)] -= amount;
     }
     
     // adds shares to fee balances , returns share amounts after deduction
     function _processFee(uint shares) internal returns(uint) {
-        uint _feeAmts = (shares/10000)*10;
+        uint _feeAmts = (shares/10000)*_txFee;
+        _mint(address(this),_feeAmts);
         _feeBalances[address(this)] += _feeAmts;
         return (shares - _feeAmts);
     }
@@ -272,7 +272,7 @@ abstract contract Multi4626V1 is ERC20 {
         uint shareC = ((totalVal * (10 ** decimals()))/ totalSupply())/divisor;
         for(uint i =0; i< _assets.length;++i){
             uint rcvadjust = (shareC * 10 ** 18)/prices[i];
-            // always assume a slippage of slip
+            // always assume a slippage of slippage()
             uint rcv = rcvadjust - ((rcvadjust/1000) * slippage);
             if (i == 0) {
                 // Scale BTC value to 8 decimals
@@ -289,12 +289,17 @@ abstract contract Multi4626V1 is ERC20 {
         (amountOut, , ,) = s_okuQuoter.quoteExactInput(path,amountIn);
     }
 
-    function _getSwapPath(address tokenIn , uint24 fee, address tokenOut) internal view returns(bytes memory path){
+
+    function _getSwapPath(address tokenIn , uint24 fee, address tokenOut) internal pure returns(bytes memory path){
         path = abi.encodePacked(tokenIn,fee,tokenOut);
     }
 
     function _setSlippage(uint num) internal {
         slippage = num;
+    }
+
+    function _setFee(uint num) internal {
+        _txFee = num;
     }
 }
 

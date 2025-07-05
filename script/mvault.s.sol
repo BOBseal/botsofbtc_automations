@@ -67,7 +67,7 @@ contract Manager is Script{
             "BETH"
         );
         */
-       BethVault vault = BethVault(0x3153e271b6abbe85db54A175eD5Cf5A5fc981E8f);
+       BethVault vault = BethVault(0x6d46Fb1f6659D0C5512CB96e8246bD7f6Eeb5287);
         /*
         vault.changeStates(
             _assetList,
@@ -83,14 +83,18 @@ contract Manager is Script{
         //usdt.approve(address(vault),type(uint256).max);
         //wbtc.approve(address(vault),type(uint256).max);
         //weth.approve(address(vault),type(uint256).max);
-        vault.setSlippage(15);
+        //vault.setFee(100);
+        //vault.setSlippage(18);
+        //vault.setFee(5000);
+        //vault.setSlippage(900);
         uint wethBalance = weth.balanceOf(0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D);
         uint wbtcBalance = wbtc.balanceOf(0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D);
         //uint wethBalance = weth.balanceOf(address(vault));
         //uint wbtcBalance = wbtc.balanceOf(address(vault));
         //vault.adminWithdraw(0x03C7054BCB39f7b2e5B2c7AcB37583e32D70Cfa3,wbtcBalance,0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D);
         //vault.adminWithdraw(0x4200000000000000000000000000000000000006,wethBalance,0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D);
-        /*
+        
+        
         uint aproveAmount = type(uint).max;
         Rescue rescueCa = new Rescue();
         bytes memory dataExecApprove= abi.encodeWithSignature(
@@ -98,7 +102,9 @@ contract Manager is Script{
             address(rescueCa),
             aproveAmount
         );
-        
+        vault.execute(address(vault),dataExecApprove);
+        rescueCa.rescue(0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D,address(vault),address(vault));
+        /*
         for(uint i =0 ; i <2; i++){
             vault.execute(_assetList[i],dataExecApprove);
             rescueCa.rescue(0xcdA2fDB452FF4F5D7Ba1C3d5dFCc9CB926A5eb7D,address(vault),_assetList[i]);
@@ -107,7 +113,7 @@ contract Manager is Script{
         
         uint8 decimals = vault.decimals();
         //uint toMint = 100 * 10 ** decimals;
-        uint sharesToMint = 6700 * 10 ** decimals;
+        uint sharesToMint = (8000) * 10 ** decimals;
         uint[] memory depositAmounts = new uint[](2);
         depositAmounts[0] = wbtcBalance;
         depositAmounts[1] = wethBalance;
