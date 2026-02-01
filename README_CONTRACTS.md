@@ -1,4 +1,3 @@
-# Bots of BTC Automations - Smart Contract Documentation
 
 ## Overview
 
